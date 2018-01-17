@@ -28,9 +28,9 @@ def parse_function_block(start, reader):
     #1 byte number of upvalues
     #1 byte number of parameters
     #1 byte is_vararg flag (see explanation further below)
-    #• 1=VARARG_HASARG
-    #• 2=VARARG_ISVARARG
-    #• 4=VARARG_NEEDSARG
+    #   1=VARARG_HASARG
+    #   2=VARARG_ISVARARG
+    #   4=VARARG_NEEDSARG
     #1 byte maximum stack size (number of registers used)
     #List list of instructions (code)
     #List list of constants
@@ -53,7 +53,7 @@ def parse_function_block(start, reader):
         '<4B', reader.read(addr, 4))
     addr += 4
 
-    code_size = struct.unpack('<L'.reader.read(addr, 4))[0]
+    code_size = struct.unpack('<L',reader.read(addr, 4))[0]
     addr += 4
 
     func_object = {}
@@ -65,8 +65,8 @@ def parse_function_block(start, reader):
 
 
 class LuaBytecodeBinaryView(BinaryView):
-    name = "LuaByteCode"
-    long_name = "LuaBytecode"
+    name = "luabytecodebinaryview"
+    long_name = "luabytecodebinaryview"
 
     def __init__(self, data):
         BinaryView.__init__(self, file_metadata=data.file, parent_view=data)
@@ -78,10 +78,11 @@ class LuaBytecodeBinaryView(BinaryView):
 
     def init(self):
         try:
-            self.platform = Architecture['luabytecode'].standalone_platform
-            self.arch = Architecture['luabytecode']
+            self.platform = Architecture['luabytecodearch'].standalone_platform
+            self.arch = Architecture['luabytecodearch']
 
-            top_level_func = parse_function_block(header_block_len)
+            top_level_func = parse_function_block(header_block_len,
+                                                  self.raw)
             self.entry_addr = top_level_func['code']['start']
 
             self.add_entry_point(self.entry_addr)

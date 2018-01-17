@@ -38,7 +38,7 @@ def parse_header_block(start, reader):
         'header_sig': header_sig,
         'version': version,
         'format_version': format_version,
-        'endianness_flag': endianness,
+        'endianness_flag': endianness_flag,
         'int_size': int_size,
         'size_t_size': size_t_size,
         'instruction_size': instruction_size,

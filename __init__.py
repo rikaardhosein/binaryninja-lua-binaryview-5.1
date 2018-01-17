@@ -10,7 +10,7 @@ header_block = None
 
 
 #-------------------------------------------------------------
-#4 bytes Header signature: ESC, “Lua” or 0x1B4C7561
+#4 bytes Header signature: ESC, "Lua" or 0x1B4C7561
 #   Binary chunk is recognized by checking for this signature
 #1 byte Version number, 0x51 (81 decimal) for Lua 5.1
 #   High hex digit is major version number

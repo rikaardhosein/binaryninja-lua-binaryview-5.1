@@ -9,16 +9,41 @@ header_block_len = 12  #Header block is always 12 bytes in size
 #Helper functions
 
 
-def parse_header_block(data):
-    # Implement this another time
-    # For now, just skip past it.
-    # We need to return the length, because
-    # This is going to be added to the length
-    # of the "instruction" parsed so that
-    # it will skip over this amount
-    # of memory when processing the next
-    # instruction.
-    return None, header_block_len
+def parse_header_block(start, reader):
+    #4 bytes Header signature: ESC, “Lua” or 0x1B4C7561
+    #   Binary chunk is recognized by checking for this signature
+    #1 byte Version number, 0x51 (81 decimal) for Lua 5.1
+    #   High hex digit is major version number
+    #   Low hex digit is minor version number
+    #1 byte Format version, 0=official version
+    #1 byte Endianness flag (default 1)
+    #   0=big endian, 1=little endian
+    #1 byte Size of int (in bytes) (default 4)
+    #1 byte Size of size_t (in bytes) (default 4)
+    #1 byte Size of Instruction (in bytes) (default 4)
+    #1 byte Size of lua_Number (in bytes) (default 8)
+    #1 byte Integral flag (default 0)
+    #   0=floating-point, 1=integral number type
+    header_block = {}
+    addr = start
+    header_sig = struct.unpack('<L', reader.read(addr, 4))
+    addr += 4
+
+    version, format_version, endianness_flag, int_size, size_t_size, instruction_size, lua_number_size, integral_flag = struct.unpack(
+        '<8B', reader.read(addr, 8))
+
+    header_block = {
+        'header_sig': header_sig,
+        'version': version,
+        'format_version': format_version,
+        'endianness_flag': endianness,
+        'int_size': int_size,
+        'size_t_size': size_t_size,
+        'instruction_size': instruction_size,
+        'lua_number_size': lua_number_size,
+        'integral_flag': integral_flag
+    }
+    return header_block, header_block_len
 
 
 def parse_function_block(start, reader):

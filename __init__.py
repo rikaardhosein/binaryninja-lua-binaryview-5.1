@@ -6,8 +6,6 @@ from binaryninja import Architecture, BinaryView, SegmentFlag, log_error
 header_sig_const = bytearray([0x1b, 0x4c, 0x75, 0x61])
 header_block_len = 12  #Header block is always 12 bytes in size
 
-header_block = None
-
 
 #-------------------------------------------------------------
 #4 bytes Header signature: ESC, "Lua" or 0x1B4C7561
@@ -66,20 +64,21 @@ def parse_header_block(start, reader):
 #List list of locals (optional debug data)
 #List list of upvalues (optional debug data)
 #------------------------------------------------------------
-def parse_function_block(start, reader):
+def parse_function_block(start, reader, header_block):
     instruction_size = 4
 
     addr = start
 
     fmt_string = ''
-
-    if header.size_t_size == 4:
+    size_t_size = header_block['size_t_size']
+    print header_block
+    if size_t_size == 4:
         fmt_string = '<L'
-    elif header.size_t_size == 8:
+    elif size_t_size == 8:
         fmt_string = '<Q'
-    source_name_len = struct.unpack(fmt_string,
-                                    reader.read(addr, header.size_t_size))[0]
-    addr += 4
+    source_name_len = struct.unpack(fmt_string, reader.read(addr,
+                                                            size_t_size))[0]
+    addr += size_t_size
     source_name = reader.read(addr, source_name_len)[0]
     addr += source_name_len
     line_defined, last_line_defined = struct.unpack('<2L', reader.read(
@@ -103,7 +102,6 @@ def parse_function_block(start, reader):
 class LuaBytecodeBinaryView(BinaryView):
     name = "luabytecodebinaryview"
     long_name = "luabytecodebinaryview"
-    header_block = None
 
     def __init__(self, data):
         BinaryView.__init__(self, file_metadata=data.file, parent_view=data)
@@ -117,8 +115,9 @@ class LuaBytecodeBinaryView(BinaryView):
         try:
             self.platform = Architecture['luabytecodearch'].standalone_platform
             self.arch = Architecture['luabytecodearch']
-            header_block = parse_header_block(0, self.raw)
-            top_level_func = parse_function_block(header_block_len, self.raw)
+            header_block, header_block_len = parse_header_block(0, self.raw)
+            top_level_func = parse_function_block(header_block_len, self.raw,
+                                                  header_block)
             self.entry_addr = top_level_func['code']['start']
 
             self.add_entry_point(self.entry_addr)

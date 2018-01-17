@@ -78,7 +78,7 @@ def parse_function_block(start, reader):
         '<4B', reader.read(addr, 4))
     addr += 4
 
-    code_size = struct.unpack('<L',reader.read(addr, 4))[0]
+    code_size = struct.unpack('<L', reader.read(addr, 4))[0]
     addr += 4
 
     func_object = {}
@@ -105,9 +105,9 @@ class LuaBytecodeBinaryView(BinaryView):
         try:
             self.platform = Architecture['luabytecodearch'].standalone_platform
             self.arch = Architecture['luabytecodearch']
-
-            top_level_func = parse_function_block(header_block_len,
-                                                  self.raw)
+            header_block = parse_header_block(0, self.raw)
+            this.store_metadata('header_block', header_block)
+            top_level_func = parse_function_block(header_block_len, self.raw)
             self.entry_addr = top_level_func['code']['start']
 
             self.add_entry_point(self.entry_addr)

@@ -3,6 +3,7 @@ import traceback
 from collections import namedtuple
 
 from binaryninja import Architecture, BinaryView, SegmentFlag, log_error
+from namedlist import namedlist
 
 header_sig_const = bytearray([0x1b, 0x4c, 0x75, 0x61])
 header_block_len = 12  #Header block is always 12 bytes in size
@@ -61,7 +62,7 @@ def load_int(addr, reader):
     fmt = prep_fmt('L')
     if int_size == 8:
         fmt = prep_fmt('Q')
-    i = struct.unapck(fmt, reader.read(addr, int_size))[0]
+    i = struct.unpack(fmt, reader.read(addr, int_size))[0]
     addr += int_size
     return i, addr
 
@@ -151,15 +152,15 @@ def load_function_block(start, reader):
     instruction_size = 4
     addr = start
 
-    FunctionBlock = namedtuple('func_block', [
+    FunctionBlock = namedlist('func_block', ' '.join([
         'source_name', 'line_defined', 'last_line_defined', 'num_upvalues',
         'num_params', 'is_vararg', 'max_stack_size', 'code_size', 'code_addr',
         'num_constants', 'constants', 'num_functions', 'func_blocks',
         'num_source_line_pos', 'source_line_pos', 'num_locals', 'locals',
-        'num_upvalues', 'upvalues'
-    ])
+        'num_upvalue_names', 'upvalue_names'
+    ]))
 
-    func_block = FunctionBlock()
+    func_block = FunctionBlock(*([None] * 19))
 
     func_block.source_name, addr = load_string(addr, reader)
     func_block.line_defined, addr = load_int(addr, reader)
@@ -170,7 +171,8 @@ def load_function_block(start, reader):
     func_block.is_vararg, addr = load_byte(addr, reader)
     func_block.max_stack_size, addr = load_byte(addr, reader)
 
-    func_block.code_size, addr = load_int(addr, reader) * instruction_size
+    func_block.code_size, addr = load_int(addr, reader)
+    func_block.code_size *= instruction_size
     func_block.code_addr = addr
     addr += (instruction_size + func_block.code_size)
 
@@ -201,10 +203,10 @@ def load_function_block(start, reader):
         func_block.locals.append((varname, startpc, endpc))
 
     func_block.upvalues = []
-    func_block.num_upvalues = load_int(addr, reader)
-    for i in range(0, func_block.num_upvalues):
+    func_block.num_upvalue_names = load_int(addr, reader)
+    for i in range(0, func_block.num_upvalue_names):
         upvalue_name, addr = load_string(addr, reader)
-        func_block.upvalues.append(upvalue_name)
+        func_block.upvalue_names.append(upvalue_name)
 
     return func_block, addr
 
@@ -239,10 +241,11 @@ class LuaBytecodeBinaryView(BinaryView):
         return True
 
     def init(self):
+        global header_block
         try:
             self.platform = Architecture['luabytecodearch'].standalone_platform
             self.arch = Architecture['luabytecodearch']
-            header_block = parse_header_block(0, self.raw)
+            header_block, header_block_len = parse_header_block(0, self.raw)
             top_level_func, addr = load_function_block(header_block_len,
                                                        self.raw)
 

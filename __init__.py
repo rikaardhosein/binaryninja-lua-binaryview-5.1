@@ -240,7 +240,6 @@ class LuaBytecodeBinaryView(BinaryView):
             self.platform = Architecture['luabytecodearch'].standalone_platform
             self.arch = Architecture['luabytecodearch']
             header_block = parse_header_block(0, self.raw)
-            this.store_metadata('header_block', header_block)
             top_level_func, addr = load_function_block(header_block_len,
                                                        self.raw)
 

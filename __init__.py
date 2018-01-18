@@ -147,7 +147,7 @@ def parse_header_block(start, reader):
 #List list of locals (optional debug data)
 #List list of upvalues (optional debug data)
 #------------------------------------------------------------
-def parse_function_block(start, reader):
+def load_function_block(start, reader):
     instruction_size = 4
     addr = start
 

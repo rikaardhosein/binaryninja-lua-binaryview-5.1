@@ -147,10 +147,9 @@ def parse_header_block(start, reader):
 #List list of locals (optional debug data)
 #List list of upvalues (optional debug data)
 #------------------------------------------------------------
-def load_function_block(start, reader):
+def parse_function_block(start, reader):
     instruction_size = 4
     addr = start
-    fmt_string = ''
 
     func_block = namedtuple(
         'source_name', 'line_defined', 'last_line_defined', 'num_upvalues',
@@ -227,7 +226,6 @@ def load_constant(addr, reader):
 class LuaBytecodeBinaryView(BinaryView):
     name = "luabytecodebinaryview"
     long_name = "luabytecodebinaryview"
-    header_block = None
 
     def __init__(self, data):
         BinaryView.__init__(self, file_metadata=data.file, parent_view=data)

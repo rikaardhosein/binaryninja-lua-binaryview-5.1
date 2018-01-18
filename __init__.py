@@ -16,6 +16,8 @@ LUA_TBOOLEAN = 1
 LUA_TNUMBER = 3
 LUA_TSTRING = 4
 
+boolean_size = 1
+
 header_block = None
 
 
@@ -78,7 +80,7 @@ def load_number(addr, reader):
 
 
 def load_boolean(addr, reader):
-    fmt = prep_fmt('_Bool')
+    fmt = prep_fmt('?')
     b = struct.unpack(fmt, reader.read(addr, boolean_size))[0]
     addr += boolean_size
     return b, addr
@@ -172,13 +174,11 @@ def load_function_block(start, reader):
     func_block.max_stack_size, addr = load_byte(addr, reader)
 
     func_block.code_size, addr = load_int(addr, reader)
-    print "Code_size: %d" % func_block.code_size
     func_block.code_size *= instruction_size
     func_block.code_addr = addr
-    addr += (instruction_size + func_block.code_size)
+    addr += (func_block.code_size)
 
     func_block.num_constants, addr = load_int(addr, reader)
-    print "Addr: %x\nnum constants: %d" % (addr, func_block.num_constants)
     func_block.constants = []
     for i in range(0, func_block.num_constants):
         c, constant_type, addr = load_constant(addr, reader)
@@ -187,16 +187,16 @@ def load_function_block(start, reader):
     func_block.num_functions, addr = load_int(addr, reader)
     func_block.func_blocks = []
     for i in range(0, func_block.num_functions):
-        func_block, addr = load_function_block(addr, reader)
-        func_block.func_blocks.append(func_block)
+        local_func_block, addr = load_function_block(addr, reader)
+        func_block.func_blocks.append(local_func_block)
 
-    func_block.num_source_line_pos = load_int(addr, reader)
+    func_block.num_source_line_pos, addr = load_int(addr, reader)
     func_block.source_line_pos = []
     for i in range(0, func_block.num_source_line_pos):
         source_line_pos, addr = load_int(addr, reader)
         func_block.source_line_pos.append(source_line_pos)
 
-    func_block.num_locals = load_int(addr, reader)
+    func_block.num_locals, addr = load_int(addr, reader)
     func_block.locals = []
     for i in range(0, func_block.num_locals):
         varname, addr = load_string(addr, reader)
@@ -204,8 +204,8 @@ def load_function_block(start, reader):
         endpc, addr = load_int(addr, reader)
         func_block.locals.append((varname, startpc, endpc))
 
-    func_block.upvalues = []
-    func_block.num_upvalue_names = load_int(addr, reader)
+    func_block.upvalue_names = []
+    func_block.num_upvalue_names, addr = load_int(addr, reader)
     for i in range(0, func_block.num_upvalue_names):
         upvalue_name, addr = load_string(addr, reader)
         func_block.upvalue_names.append(upvalue_name)
@@ -228,7 +228,7 @@ def load_constant(addr, reader):
     else:
         raise ValueError('Unknown constant type %d @ %x\n' % (constant_type,
                                                               addr))
-    print "Addr: %x\nConstant type: %d\nConstant: " % (prev_addr, constant_type)
+                                                       constant_type)
     return c, constant_type, addr
 
 
@@ -253,7 +253,6 @@ class LuaBytecodeBinaryView(BinaryView):
             top_level_func, addr = load_function_block(header_block_len,
                                                        self.raw)
 
-            print top_level_func
             self.entry_addr = top_level_func.code_addr
 
             self.add_entry_point(self.entry_addr)

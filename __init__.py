@@ -228,8 +228,16 @@ def load_constant(addr, reader):
     else:
         raise ValueError('Unknown constant type %d @ %x\n' % (constant_type,
                                                               addr))
-                                                       constant_type)
     return c, constant_type, addr
+
+
+def add_func_block_segments(func_block, bv):
+    bv.add_auto_segment(
+        func_block.code_addr, func_block.code_size, func_block.code_addr,
+        func_block.code_size,
+        SegmentFlag.SegmentExecutable | SegmentFlag.SegmentReadable)
+    for fb in func_block.func_blocks:
+        add_func_block_segments(fb, bv)
 
 
 class LuaBytecodeBinaryView(BinaryView):
@@ -257,10 +265,7 @@ class LuaBytecodeBinaryView(BinaryView):
 
             self.add_entry_point(self.entry_addr)
 
-            self.add_auto_segment(
-                self.entry_addr, top_level_func.code_size, self.entry_addr,
-                top_level_func.code_size,
-                SegmentFlag.SegmentExecutable | SegmentFlag.SegmentReadable)
+            add_func_block_segments(top_level_func, self)
         except:
             log_error(traceback.format_exc())
             return False

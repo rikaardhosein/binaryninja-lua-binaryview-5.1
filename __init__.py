@@ -151,12 +151,15 @@ def load_function_block(start, reader):
     instruction_size = 4
     addr = start
 
-    func_block = namedtuple(
+    FunctionBlock = namedtuple('func_block', [
         'source_name', 'line_defined', 'last_line_defined', 'num_upvalues',
         'num_params', 'is_vararg', 'max_stack_size', 'code_size', 'code_addr',
         'num_constants', 'constants', 'num_functions', 'func_blocks',
         'num_source_line_pos', 'source_line_pos', 'num_locals', 'locals',
-        'num_upvalues', 'upvalues')
+        'num_upvalues', 'upvalues'
+    ])
+
+    func_block = FunctionBlock()
 
     func_block.source_name, addr = load_string(addr, reader)
     func_block.line_defined, addr = load_int(addr, reader)

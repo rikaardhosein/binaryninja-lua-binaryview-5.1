@@ -214,6 +214,7 @@ def load_function_block(start, reader):
 
 
 def load_constant(addr, reader):
+    prev_addr = addr
     constant_type, addr = load_byte(addr, reader)
     c = None
     if constant_type == LUA_TNIL:
@@ -227,6 +228,7 @@ def load_constant(addr, reader):
     else:
         raise ValueError('Unknown constant type %d @ %x\n' % (constant_type,
                                                               addr))
+    print "Addr: %x\nConstant type: %d\nConstant: " % (prev_addr, constant_type)
     return c, constant_type, addr
 
 

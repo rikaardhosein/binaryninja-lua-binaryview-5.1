@@ -172,11 +172,13 @@ def load_function_block(start, reader):
     func_block.max_stack_size, addr = load_byte(addr, reader)
 
     func_block.code_size, addr = load_int(addr, reader)
+    print "Code_size: %d" % func_block.code_size
     func_block.code_size *= instruction_size
     func_block.code_addr = addr
     addr += (instruction_size + func_block.code_size)
 
     func_block.num_constants, addr = load_int(addr, reader)
+    print "Addr: %x\nnum constants: %d" % (addr, func_block.num_constants)
     func_block.constants = []
     for i in range(0, func_block.num_constants):
         c, constant_type, addr = load_constant(addr, reader)

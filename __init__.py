@@ -1,12 +1,93 @@
 import struct
 import traceback
+from collections import namedtuple
 
 from binaryninja import Architecture, BinaryView, SegmentFlag, log_error
 
 header_sig_const = bytearray([0x1b, 0x4c, 0x75, 0x61])
 header_block_len = 12  #Header block is always 12 bytes in size
 
+LUA_LITTLE_ENDIAN = 1
+LUA_BIG_ENDIAN = 0
+
+LUA_TNIL = 0
+LUA_TBOOLEAN = 1
+LUA_TNUMBER = 3
+LUA_TSTRING = 4
+
 header_block = None
+
+
+def prep_fmt(fc):
+    global header_block
+    fmt = ''
+    endianness = header_block['endianness_flag']
+    assert (endianness == LUA_LITTLE_ENDIAN
+            or endianness == LUA_BIG_ENDIAN), "Unknown endianness"
+    if endianness == LUA_LITTLE_ENDIAN:
+        fmt += '<'
+    elif endianness == LUA_BIG_ENDIAN:
+        fmt += '>'
+
+    fmt += fc
+    return fmt
+
+
+def load_string(addr, reader):
+    global header_block
+    size_t_size = header_block['size_t_size']
+
+    fmt = prep_fmt('L')
+    if size_t_size == 8:
+        fmt = prep_fmt('Q')
+
+    slen = struct.unpack(fmt, reader.read(addr, size_t_size))[0]
+    addr += size_t_size
+    s = struct.unpack('@%ds' % slen, reader.read(addr, slen))[0]
+    s = s[:-1]
+    addr += slen
+    return s, addr
+
+
+def load_byte(addr, reader):
+    b = struct.unpack('@B', reader.read(addr, 1))[0]
+    addr += 1
+    return b, addr
+
+
+def load_int(addr, reader):
+    global header_block
+    int_size = header_block['int_size']
+    fmt = prep_fmt('L')
+    if int_size == 8:
+        fmt = prep_fmt('Q')
+    i = struct.unapck(fmt, reader.read(addr, int_size))[0]
+    addr += int_size
+    return i, addr
+
+
+def load_number(addr, reader):
+    #TODO: Does not consider if integral flag is set.
+    global header_block
+    number_size = header_block['number_size']
+    fmt = prep_fmt('d')
+    n = struct.unpack(fmt, reader.read(addr, number_size))[0]
+    addr += number_size
+    return n, addr
+
+
+def load_boolean(addr, reader):
+    fmt = prep_fmt('_Bool')
+    b = struct.unpack(fmt, reader.read(addr, boolean_size))[0]
+    addr += boolean_size
+    return b, addr
+
+
+def load_byte(addr, reader):
+    fmt = prep_fmt('B')
+    b = struct.unpack(fmt, reader.read(addr, 1))[0]
+    addr += 1
+    return b, addr
 
 
 #-------------------------------------------------------------
@@ -42,7 +123,7 @@ def parse_header_block(start, reader):
         'int_size': int_size,
         'size_t_size': size_t_size,
         'instruction_size': instruction_size,
-        'lua_number_size': lua_number_size,
+        'number_size': lua_number_size,
         'integral_flag': integral_flag
     }
     return header_block, header_block_len
@@ -66,38 +147,81 @@ def parse_header_block(start, reader):
 #List list of locals (optional debug data)
 #List list of upvalues (optional debug data)
 #------------------------------------------------------------
-def parse_function_block(start, reader):
+def load_function_block(start, reader):
     instruction_size = 4
-
     addr = start
-
     fmt_string = ''
 
-    if header.size_t_size == 4:
-        fmt_string = '<L'
-    elif header.size_t_size == 8:
-        fmt_string = '<Q'
-    source_name_len = struct.unpack(fmt_string,
-                                    reader.read(addr, header.size_t_size))[0]
-    addr += 4
-    source_name = reader.read(addr, source_name_len)[0]
-    addr += source_name_len
-    line_defined, last_line_defined = struct.unpack('<2L', reader.read(
-        addr, 8))
-    addr += 8
-    num_upvalues, num_params, is_vararg, max_stack_size = struct.unpack(
-        '<4B', reader.read(addr, 4))
-    addr += 4
+    func_block = namedtuple(
+        'source_name', 'line_defined', 'last_line_defined', 'num_upvalues',
+        'num_params', 'is_vararg', 'max_stack_size', 'code_size', 'code_addr',
+        'num_constants', 'constants', 'num_functions', 'func_blocks',
+        'num_source_line_pos', 'source_line_pos', 'num_locals', 'locals',
+        'num_upvalues', 'upvalues')
 
-    code_size = struct.unpack('<L', reader.read(addr, 4))[0]
-    addr += 4
+    func_block.source_name, addr = load_string(addr, reader)
+    func_block.line_defined, addr = load_int(addr, reader)
+    func_block.last_line_defined, addr = load_int(addr, reader)
 
-    func_object = {}
-    code = func_object['code'] = {}
-    code['start'] = addr
-    code['size'] = code_size * instruction_size
+    func_block.num_upvalues, addr = load_byte(addr, reader)
+    func_block.num_params, addr = load_byte(addr, reader)
+    func_block.is_vararg, addr = load_byte(addr, reader)
+    func_block.max_stack_size, addr = load_byte(addr, reader)
 
-    return func_object
+    func_block.code_size, addr = load_int(addr, reader) * instruction_size
+    func_block.code_addr = addr
+    addr += (instruction_size + func_block.code_size)
+
+    func_block.num_constants, addr = load_int(addr, reader)
+    func_block.constants = []
+    for i in range(0, func_block.num_constants):
+        c, constant_type, addr = load_constant(addr, reader)
+        func_block.constants.append((constant_type, c))
+
+    func_block.num_functions, addr = load_int(addr, reader)
+    func_block.func_blocks = []
+    for i in range(0, func_block.num_functions):
+        func_block, addr = load_function_block(addr, reader)
+        func_block.func_blocks.append(func_block)
+
+    func_block.num_source_line_pos = load_int(addr, reader)
+    func_block.source_line_pos = []
+    for i in range(0, func_block.num_source_line_pos):
+        source_line_pos, addr = load_int(addr, reader)
+        func_block.source_line_pos.append(source_line_pos)
+
+    func_block.num_locals = load_int(addr, reader)
+    func_block.locals = []
+    for i in range(0, func_block.num_locals):
+        varname, addr = load_string(addr, reader)
+        startpc, addr = load_int(addr, reader)
+        endpc, addr = load_int(addr, reader)
+        func_block.locals.append((varname, startpc, endpc))
+
+    func_block.upvalues = []
+    func_block.num_upvalues = load_int(addr, reader)
+    for i in range(0, func_block.num_upvalues):
+        upvalue_name, addr = load_string(addr, reader)
+        func_block.upvalues.append(upvalue_name)
+
+    return func_block, addr
+
+
+def load_constant(addr, reader):
+    constant_type, addr = load_byte(addr, reader)
+    c = None
+    if constant_type == LUA_TNIL:
+        c = None
+    elif constant_type == LUA_TNUMBER:
+        c, addr = load_number(addr, reader)
+    elif constant_type == LUA_TSTRING:
+        c, addr = load_string(addr, reader)
+    elif constant_type == LUA_TBOOLEAN:
+        c, addr = load_boolean(addr, reader)
+    else:
+        raise ValueError('Unknown constant type %d @ %x\n' % (constant_type,
+                                                              addr))
+    return c, constant_type, addr
 
 
 class LuaBytecodeBinaryView(BinaryView):
@@ -119,14 +243,17 @@ class LuaBytecodeBinaryView(BinaryView):
             self.arch = Architecture['luabytecodearch']
             header_block = parse_header_block(0, self.raw)
             this.store_metadata('header_block', header_block)
-            top_level_func = parse_function_block(header_block_len, self.raw)
-            self.entry_addr = top_level_func['code']['start']
+            top_level_func, addr = load_function_block(header_block_len,
+                                                       self.raw)
+
+            print top_level_func
+            self.entry_addr = top_level_func.code_addr
 
             self.add_entry_point(self.entry_addr)
 
             self.add_auto_segment(
-                self.entry_addr, top_level_func['code']['size'],
-                self.entry_addr, top_level_func['code']['size'],
+                self.entry_addr, top_level_func.code_size, self.entry_addr,
+                top_level_func.code_size,
                 SegmentFlag.SegmentExecutable | SegmentFlag.SegmentReadable)
         except:
             log_error(traceback.format_exc())
